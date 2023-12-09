@@ -1,5 +1,5 @@
 output:
-  - platform: libretiny_pwm
+  - platform: libretiny_pwmx
     id: output_cold
     pin: P7
   - platform: libretiny_pwm
