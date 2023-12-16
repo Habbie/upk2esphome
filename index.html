@@ -1,0 +1,286 @@
+<!--
+  ~ Copyright (c) Kuba Szczodrzyński 2023-4-21.
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UPK2ESPHome</title>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <link crossorigin="anonymous" href="https://pyscript.net/latest/pyscript.css" rel="stylesheet"/>
+    <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css"
+          integrity="sha384-KK94CHFLLe+nY2dmCWGMq91rCGa5gtU4mk92HdvYe+M/SXH301p5ILy+dN9+nJOZ" rel="stylesheet">
+</head>
+<body>
+
+<py-config src="./config.json" type="json"></py-config>
+
+<py-script>
+    from upk2esphome.web import on_pyscript_ready, on_run_click
+
+    on_pyscript_ready()
+</py-script>
+
+<div class="container">
+    <h1 class="text-body-emphasis">UPK2ESPHome</h1>
+    <p>
+        <a class="text-body-secondary" href="https://github.com/libretiny-eu/upk2esphome">See on GitHub</a>
+    </p>
+    <p class="fs-5 col-md-8">
+        This website allows you to generate ESPHome YAML Configuration based on <code>user_param_key</code>
+        parameters, used in many Tuya smart devices.
+    </p>
+    <p>Accepted input formats are:</p>
+    <ul>
+        <li>Cloudcutter device JSON (entire file)</li>
+        <li>Entire "storage" JSON, as extracted by <a
+                href="https://github.com/tuya-cloudcutter/bk7231tools">bk7231tools</a>
+        </li>
+        <li><code>user_param_key</code> JSON (just the object)</li>
+        <li>raw data (JSON-like) extracted from storage, or offset 0x1E5000/0x1D4000 of the flash memory</li>
+    </ul>
+    <p>Supported device features are: relays, buttons, LEDs (status, PWM, driver chips), power monitoring chips, IR/RF receivers.</p>
+    <div class="alert alert-dismissible alert-warning fade show" role="alert" id="disclaimer">
+        <p>While the author has taken care to write the converter as well as possible, keep in mind that this might not
+            be 100% accurate!</p>
+        <p>There may be some errors, such as missing components (unsupported types) or incorrect readings.</p>
+        <p>This serves mostly as a kickstart config, rather than a production-ready file. Make sure to review the output
+            before uploading it to the device.</p>
+        <p><b>We do not take responsibility for using this tool and the generated configs.</b></p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"
+                id="close-disclaimer"></button>
+    </div>
+    <div class="alert alert-info" role="alert">
+        <p><b>
+            Download <a href="https://docs.libretiny.eu/docs/flashing/tools/ltchiptool/">ltchiptool</a>
+            for the best experience!
+        </b></p>
+        <p>
+            Includes grabbing UPK data directly from
+            <a href="https://github.com/libretiny-eu/esphome-kickstart">ESPHome-Kickstart</a>.
+        </p>
+    </div>
+    <div class="col-sm-12" id="warnings"></div>
+    <div class="row">
+        <div class="col-sm-12 col-md-8 col-lg-4 col-xl-4 col-xxl-4">
+            <label class="form-label" for="profiles">Choose a predefined profile:</label>
+            <select class="form-select" id="profiles"></select>
+            <label class="form-label" for="profileUrl">Profile URL:</label>
+            <input class="form-control" id="profileUrl" readonly type="text"/>
+            <label class="form-label" for="input">Input data</label>
+            <textarea class="form-control" id="input" rows="20" style="font-family: monospace"></textarea>
+        </div>
+        <div class="col-sm-12 col-md-4 col-lg-3 col-xl-3 col-xxl-2" id="options">
+            <p>Conversion options</p>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_esphome_block" type="checkbox">
+                <label class="form-check-label" for="opts_esphome_block">Include <code>esphome:</code> block</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_name_mac" type="checkbox">
+                <label class="form-check-label" for="opts_name_mac">Add MAC to device name</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_common" type="checkbox">
+                <label class="form-check-label" for="opts_common">Add common components</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_web_server" type="checkbox">
+                <label class="form-check-label" for="opts_web_server">Add Web Server & Captive Portal</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_restart" type="checkbox">
+                <label class="form-check-label" for="opts_restart">Add restart button & sensor</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_uptime" type="checkbox">
+                <label class="form-check-label" for="opts_uptime">Add uptime sensor</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" id="opts_lt_version" type="checkbox">
+                <label class="form-check-label" for="opts_lt_version">Add LT version sensor</label>
+            </div>
+            <div class="mt-3">
+                <label class="form-label" for="opts_wifi_ssid">Wi-Fi SSID</label>
+                <input class="form-control" id="opts_wifi_ssid" type="text">
+            </div>
+            <div class="mt-3">
+                <label class="form-label" for="opts_wifi_password">Wi-Fi password</label>
+                <input class="form-control" id="opts_wifi_password" type="text">
+            </div>
+            <div class="mt-3">
+                <label class="form-label" for="opts_ota_password">OTA password</label>
+                <input class="form-control" id="opts_ota_password" type="text">
+            </div>
+            <div class="mt-3">
+                <label class="form-label" for="opts_api_password">API password</label>
+                <input class="form-control" id="opts_api_password" type="text">
+            </div>
+        </div>
+        <div class="col-sm-12 col-md-12 col-lg-5 col-xl-5 col-xxl-6">
+            <label class="form-label" for="output">Resulting YAML:</label>
+            <textarea class="form-control" id="output" readonly rows="23" style="font-family: monospace"></textarea>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-sm-12" style="text-align: center">
+            <button class="btn btn-primary mt-3" id="run" type="button">Generate YAML</button>
+        </div>
+        <div class="col-sm-12" id="logs"></div>
+        <footer class="py-3 my-4 border-top">
+            <p class="col-sm-12 mb-0 text-body-secondary mb-md-0 me-md-auto link-body-emphasis text-decoration-none">
+                &copy; 2023 kuba2k2,
+                <a class="text-body-secondary" href="https://github.com/libretiny-eu/libretiny">
+                    the LibreTiny project
+                </a>
+                &amp;
+                <a class="text-body-secondary" href="https://github.com/tuya-cloudcutter/tuya-cloudcutter">
+                    the tuya-cloudcutter project
+                </a>
+                &bull;
+                <img src="ko-fi.png" style="height: 24px;" alt="Ko-Fi Logo">
+                <a class="text-body-secondary" href="https://ko-fi.com/kuba2k2">Support me on Ko-fi</a>
+            </p>
+        </footer>
+    </div>
+</div>
+
+<script>
+    $("#close-disclaimer").on("click", function () {
+        localStorage.setItem("disclaimerClosed", "true");
+    });
+
+    if (localStorage.getItem("disclaimerClosed") === "true") {
+        $("#disclaimer").hide();
+    }
+
+    function setProfileFromUrl(noHistory = false) {
+        const query = new URLSearchParams(location.search);
+        const profile = query.get('profile');
+        if (profile) {
+            const option = $(`#profiles option[value='${profile}']`);
+            if (option.length) {
+                option.prop('selected', true);
+                runProfile(query.get("profile"), noHistory);
+            }
+        }
+    }
+
+    function runProfile(slug, noHistory = false) {
+        if (slug === 0) {
+            $("#warnings").empty();
+            $("#logs").empty();
+            $("#input").val("");
+            $("#output").val("");
+            $("#profileUrl").val("");
+        } else {
+            $.getJSON("https://tuya-cloudcutter.github.io/api/devices/" + slug + ".json", function (data) {
+                const textData = JSON.stringify(data, undefined, 2)
+                $("#input").val(textData);
+                localStorage.setItem("input", textData);
+
+                const profileUrl = document.location.origin + document.location.pathname + "?profile=" + data.slug;
+                if (!noHistory)
+                    history.pushState({}, null, profileUrl);
+                $("#profileUrl").val(profileUrl);
+
+                document.title = `${data.manufacturer} ${data.name} | UPK2ESPHome`;
+
+                $("#run").click();
+            });
+        }
+    }
+
+    function onPyscriptReady(defaultOptsPy) {
+        const defaultOpts = defaultOptsPy.toJs();
+        $("input, textarea").each(function () {
+            const el = $(this)[0];
+            if (el.hasAttribute("readonly"))
+                return;
+
+            let value = localStorage.getItem(el.id);
+            if (!value) {
+                if (!el.id.startsWith("opts_"))
+                    return;
+                const key = el.id.substring(5);
+                if (!defaultOpts.has(key))
+                    return;
+                value = `${defaultOpts.get(key)}`;
+            }
+
+            if (el.type === "text" || el.tagName === "TEXTAREA") {
+                if (!el.value)
+                    el.value = value;
+            } else if (el.type === "checkbox") {
+                el.checked = value === "true";
+            }
+        });
+    }
+
+    $.getJSON("https://tuya-cloudcutter.github.io/api/devices.json", function (data) {
+        const profiles = $("#profiles");
+        $.each(data, function (index, value) {
+            profiles.append($("<option>", {
+                value: value.slug,
+                text: value.manufacturer + ' - ' + value.name
+            }));
+        });
+        const options = $("#profiles option");
+        options.detach().sort(function (a, b) {
+            const at = $(a).text().toLowerCase();
+            const bt = $(b).text().toLowerCase();
+            return (at > bt) ? 1 : ((at < bt) ? -1 : 0);
+        });
+        profiles.append($("<option>", {
+            value: 0,
+            text: "Select profile"
+        }));
+        options.appendTo("#profiles");
+        profiles[0].selectedIndex = 0;
+        setProfileFromUrl();
+    });
+
+    window.addEventListener("popstate", function () {
+        setProfileFromUrl(true);
+    })
+
+    $("#profiles").on("change", function () {
+        runProfile(this.value);
+    });
+
+    $("input, textarea").on("change", function () {
+        const el = $(this)[0];
+        if (el.type === "text" || el.tagName === "TEXTAREA") {
+            localStorage.setItem(el.id, el.value);
+        } else if (el.type === "checkbox") {
+            localStorage.setItem(el.id, el.checked);
+        }
+
+        if (el.tagName === "TEXTAREA") {
+            const pageUrl = document.location.origin + document.location.pathname;
+            history.pushState({}, null, pageUrl);
+            $("#profileUrl").val("");
+
+            document.title = `UPK2ESPHome`;
+        }
+
+        $("#run").click();
+    });
+
+    $("#run").on("click", function () {
+        if (!pyscript || !pyscript.interpreter) {
+            setTimeout(() => {
+                $("#run").click();
+            }, 300)
+            return;
+        }
+        pyscript.interpreter.globals.get("on_run_click")();
+    });
+</script>
+<script crossorigin="anonymous"
+        integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe"
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
